@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://du3u1nwmuu4uq"]
+
+[ext_resource type="Script" uid="uid://ckbgskvsrw8td" path="res://scripts/weapons/weapon.gd" id="1_krih0"]
+
+[node name="Weapon" type="Node2D" unique_id=1172249760]
+script = ExtResource("1_krih0")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1396499622]
+
+[node name="MuzzlePoint" type="Marker2D" parent="." unique_id=1372124540]
+
+[node name="ReloadTimer" type="Timer" parent="." unique_id=598360663]

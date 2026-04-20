@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://bvwvxhrf1et4r"]
+
+[ext_resource type="Script" uid="uid://dy3ur3kulpxtt" path="res://scripts/enemies/enemy_basic.gd" id="1_3830d"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_bgbw7"]
+
+[node name="EnemyBasic" type="CharacterBody2D" unique_id=557164597]
+collision_layer = 2
+collision_mask = 5
+script = ExtResource("1_3830d")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=242079277]
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+color = Color(1, 0, 0, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=933078867]
+shape = SubResource("CapsuleShape2D_bgbw7")
+
+[node name="HealthBar" type="ProgressBar" parent="." unique_id=1512546099]
+offset_right = 4.0
+offset_bottom = 27.0

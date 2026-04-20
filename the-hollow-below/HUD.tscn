@@ -1,0 +1,609 @@
+[gd_scene format=3 uid="uid://cdhqyxehvcicp"]
+
+[ext_resource type="Texture2D" uid="uid://ctybampv0dsyt" path="res://assets/sprites/serce.png" id="2_efote"]
+
+[sub_resource type="GDScript" id="GDScript_k5de2"]
+script/source = "extends CanvasLayer
+
+# ── Referencje do labelek (pasują do HUD.tscn) ───────────────────────────────
+
+# TopBar — widoczne
+@onready var hp_value: Label        = $TopBar/HP/Value
+@onready var armor_value: Label     = $TopBar/Armor/Value
+@onready var speed_value: Label     = $TopBar/Speed/Value
+@onready var stress_value: Label    = $TopBar/Stress/Value
+
+# TopBar — ukryte (HiddenStats)
+@onready var dodge_value: Label     = $TopBar/HiddenStats/Dodge/Value
+@onready var crit_value: Label      = $TopBar/HiddenStats/Crit/Value
+@onready var vision_value: Label    = $TopBar/HiddenStats/Vision/Value
+@onready var karma_value: Label     = $TopBar/HiddenStats/Karma/Value
+@onready var luck_value: Label      = $TopBar/HiddenStats/Luck/Value
+
+# LeftPanel — Atrybuty
+@onready var str_value: Label       = $LeftPanel/Attributes/STR/Value
+@onready var int_value: Label       = $LeftPanel/Attributes/INT/Value
+@onready var agi_value: Label       = $LeftPanel/Attributes/AGI/Value
+
+# LeftPanel — Statystyki broni
+@onready var weapon_name_label: Label   = $LeftPanel/WeaponStats/Name
+@onready var dmg_value: Label           = $LeftPanel/WeaponStats/DMG/Value
+@onready var atkspeed_value: Label      = $LeftPanel/WeaponStats/AtkSpeed/Value
+@onready var range_value: Label         = $LeftPanel/WeaponStats/Range/Value
+@onready var crit_weapon_value: Label   = $LeftPanel/WeaponStats/Crit/Value
+@onready var shotspeed_value: Label     = $LeftPanel/WeaponStats/ShotSpeed/Value
+@onready var spread_value: Label        = $LeftPanel/WeaponStats/Spread/Value
+@onready var ammo_value: Label          = $LeftPanel/WeaponStats/Ammo/Value
+@onready var reload_bar: ProgressBar    = $LeftPanel/WeaponStats/ReloadBar
+
+# ── Stan ─────────────────────────────────────────────────────────────────────
+var _player: Player = null
+var _stats: PlayerStats = null
+var _karma_visible: bool = false
+var _hidden_stats_visible: bool = false
+
+# Pełna przeładowywana animacja
+var _reload_tween: Tween = null
+
+# ─────────────────────────────────────────────────────────────────────────────
+func _ready() -> void:
+	# Schowaj ukryte statystyki dopóki nie odblokowane
+	$TopBar/HiddenStats.visible = false
+
+	# Poczekaj jedną klatkę żeby gracz zdążył się dodać do sceny
+	await get_tree().process_frame
+	_find_player()
+
+func _find_player() -> void:
+	_player = get_tree().get_first_node_in_group(\"player\") as Player
+	if _player == null:
+		push_warning(\"HUD: nie znaleziono gracza!\")
+		return
+
+	_stats = _player.stats
+
+	# Podłącz sygnały gracza
+	_player.stats_changed.connect(_on_stats_changed)
+	_player.weapon_switched.connect(_on_weapon_switched)
+
+	# Podłącz aktywną broń
+	var weapon = _player.get_active_weapon()
+	if weapon:
+		_connect_weapon(weapon)
+
+	# Pierwsze odświeżenie
+	_refresh_stats()
+	_refresh_weapon()
+
+# ── Sygnały ──────────────────────────────────────────────────────────────────
+func _on_stats_changed(_new_stats: PlayerStats) -> void:
+	_refresh_stats()
+
+func _on_weapon_switched(weapon: Weapon) -> void:
+	_connect_weapon(weapon)
+	_refresh_weapon()
+
+func _connect_weapon(weapon: Weapon) -> void:
+	# Odłącz poprzednie połączenia żeby uniknąć duplikatów
+	if weapon.ammo_changed.is_connected(_on_ammo_changed):
+		weapon.ammo_changed.disconnect(_on_ammo_changed)
+	if weapon.reloading.is_connected(_on_reloading):
+		weapon.reloading.disconnect(_on_reloading)
+
+	weapon.ammo_changed.connect(_on_ammo_changed)
+	weapon.reloading.connect(_on_reloading)
+
+func _on_ammo_changed(current: int, max_ammo: int) -> void:
+	ammo_value.text = \"%d / %d\" % [current, max_ammo]
+
+	# Ukryj pasek reload gdy amunicja uzupełniona
+	if current == max_ammo:
+		reload_bar.visible = false
+		if _reload_tween:
+			_reload_tween.kill()
+
+func _on_reloading(reload_time: float) -> void:
+	reload_bar.visible = true
+	reload_bar.value = 0.0
+	reload_bar.max_value = 100.0
+
+	if _reload_tween:
+		_reload_tween.kill()
+	_reload_tween = create_tween()
+	_reload_tween.tween_property(reload_bar, \"value\", 100.0, reload_time)
+
+# ── Odświeżanie statystyk ─────────────────────────────────────────────────────
+func _refresh_stats() -> void:
+	if _stats == null:
+		return
+
+	hp_value.text    = \"%d / %d\" % [int(_stats.hp), int(_stats.max_hp)]
+	armor_value.text = str(int(_stats.armor))
+	speed_value.text = \"%.1f×\" % _stats.speed
+	stress_value.text = \"%d%%\" % int(_stats.stress)
+
+	# Atrybuty
+	str_value.text = \"%.1f\" % _stats.strength
+	int_value.text = \"%.1f\" % _stats.intelligence
+	agi_value.text = \"%.1f\" % _stats.agility
+
+	# Ukryte statystyki (pokazywane tylko gdy odblokowane)
+	dodge_value.text  = \"%d%%\" % int(_stats.dodge)
+	crit_value.text   = \"%d%%\" % int(_stats.crit)
+	vision_value.text = str(_stats.vision_range)
+	luck_value.text   = \"%.2f×\" % _stats.luck
+
+	# Karma — widoczna tylko po odblokowaniu
+	if _karma_visible:
+		karma_value.text = \"%.1f\" % _stats.karma
+	else:
+		karma_value.text = \"???\"
+
+func _refresh_weapon() -> void:
+	if _player == null:
+		return
+	var weapon = _player.get_active_weapon()
+	if weapon == null or weapon.data == null:
+		return
+
+	var d = weapon.data
+	weapon_name_label.text = d.weapon_name
+
+	# DMG z uwzględnieniem statystyk gracza
+	var display_dmg = _stats.calc_damage(d.damage) if _stats else d.damage
+	dmg_value.text       = \"%.1f\" % display_dmg
+	atkspeed_value.text  = \"%.1f/s\" % d.attack_speed
+	range_value.text     = \"%d px\" % int(d.range)
+	crit_weapon_value.text = \"%d%%\" % int(d.crit_chance)
+	shotspeed_value.text = \"%d px/s\" % int(d.shot_speed)
+	spread_value.text    = \"%d×\" % d.spread
+	ammo_value.text      = \"%d / %d\" % [weapon.current_ammo, d.max_ammo]
+
+# ── Publiczne API ─────────────────────────────────────────────────────────────
+
+# Wywoływane przez The Third Eye / Telefon Oppo
+func reveal_karma() -> void:
+	_karma_visible = true
+	_refresh_stats()
+
+# Odblokuj ukryte statystyki (Telefon Oppo)
+func reveal_hidden_stats() -> void:
+	_hidden_stats_visible = true
+	$TopBar/HiddenStats.visible = true
+	_refresh_stats()
+
+# Aktualizacja złota / kluczy (BottomRight)
+func set_currency(gold: int, keys: int) -> void:
+	var gold_label = get_node_or_null(\"BottomRight/Currency/Gold/Value\")
+	var keys_label = get_node_or_null(\"BottomRight/Currency/Keys/Value\")
+	if gold_label:
+		gold_label.text = str(gold)
+	if keys_label:
+		keys_label.text = str(keys)
+"
+
+[sub_resource type="CanvasTexture" id="CanvasTexture_vow1y"]
+diffuse_texture = ExtResource("2_efote")
+
+[node name="Main" type="CanvasLayer" unique_id=514642151]
+script = SubResource("GDScript_k5de2")
+
+[node name="TopBar" type="HBoxContainer" parent="." unique_id=1784404265]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 23.0
+grow_horizontal = 2
+theme_override_constants/separation = 16
+
+[node name="HP" type="HBoxContainer" parent="TopBar" unique_id=1735158409]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/HP" unique_id=517461767]
+layout_mode = 2
+tooltip_text = "❤️"
+texture = SubResource("CanvasTexture_vow1y")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HP" unique_id=995551824]
+layout_mode = 2
+
+[node name="Armor" type="HBoxContainer" parent="TopBar" unique_id=2143064427]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/Armor" unique_id=727630311]
+layout_mode = 2
+tooltip_text = "🛡️"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/Armor" unique_id=316277044]
+layout_mode = 2
+
+[node name="Speed" type="HBoxContainer" parent="TopBar" unique_id=1058726025]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/Speed" unique_id=631239451]
+layout_mode = 2
+tooltip_text = "💨"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/Speed" unique_id=715728822]
+layout_mode = 2
+
+[node name="Stress" type="HBoxContainer" parent="TopBar" unique_id=1195936115]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/Stress" unique_id=749143975]
+layout_mode = 2
+tooltip_text = "😰"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/Stress" unique_id=1501423113]
+layout_mode = 2
+
+[node name="HiddenStats" type="HBoxContainer" parent="TopBar" unique_id=965318613]
+layout_mode = 2
+
+[node name="Dodge" type="HBoxContainer" parent="TopBar/HiddenStats" unique_id=251724639]
+layout_mode = 2
+tooltip_text = "🌀"
+
+[node name="Icon" type="TextureRect" parent="TopBar/HiddenStats/Dodge" unique_id=1712402018]
+layout_mode = 2
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HiddenStats/Dodge" unique_id=1875526048]
+layout_mode = 2
+
+[node name="Crit" type="HBoxContainer" parent="TopBar/HiddenStats" unique_id=267885079]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/HiddenStats/Crit" unique_id=1589577202]
+layout_mode = 2
+tooltip_text = "⭐"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HiddenStats/Crit" unique_id=963260730]
+layout_mode = 2
+
+[node name="Vision" type="HBoxContainer" parent="TopBar/HiddenStats" unique_id=2113460184]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/HiddenStats/Vision" unique_id=358759491]
+layout_mode = 2
+tooltip_text = "👁"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HiddenStats/Vision" unique_id=1436138050]
+layout_mode = 2
+
+[node name="Karma" type="HBoxContainer" parent="TopBar/HiddenStats" unique_id=1353924306]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/HiddenStats/Karma" unique_id=1370258542]
+layout_mode = 2
+tooltip_text = "☯"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HiddenStats/Karma" unique_id=2030801428]
+layout_mode = 2
+
+[node name="Luck" type="HBoxContainer" parent="TopBar/HiddenStats" unique_id=486757386]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopBar/HiddenStats/Luck" unique_id=1763041914]
+layout_mode = 2
+tooltip_text = "🍀"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="TopBar/HiddenStats/Luck" unique_id=1183088275]
+layout_mode = 2
+
+[node name="LeftPanel" type="VBoxContainer" parent="." unique_id=1059685927]
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_top = -162.0
+offset_right = 40.0
+offset_bottom = 162.0
+grow_vertical = 2
+
+[node name="Attributes" type="VBoxContainer" parent="LeftPanel" unique_id=770624557]
+layout_mode = 2
+
+[node name="STR" type="HBoxContainer" parent="LeftPanel/Attributes" unique_id=2030685190]
+layout_mode = 2
+tooltip_text = "💪"
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/Attributes/STR" unique_id=973142803]
+layout_mode = 2
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/Attributes/STR" unique_id=1716774437]
+layout_mode = 2
+tooltip_text = "0"
+mouse_filter = 1
+
+[node name="INT" type="HBoxContainer" parent="LeftPanel/Attributes" unique_id=565017261]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/Attributes/INT" unique_id=311772498]
+layout_mode = 2
+tooltip_text = "🧠"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/Attributes/INT" unique_id=1249689632]
+layout_mode = 2
+tooltip_text = "0"
+mouse_filter = 1
+
+[node name="AGI" type="HBoxContainer" parent="LeftPanel/Attributes" unique_id=1103988909]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/Attributes/AGI" unique_id=911307702]
+layout_mode = 2
+tooltip_text = "🦶"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/Attributes/AGI" unique_id=17551814]
+layout_mode = 2
+tooltip_text = "0"
+mouse_filter = 1
+
+[node name="WeaponStats" type="VBoxContainer" parent="LeftPanel" unique_id=1542249799]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Name" type="Label" parent="LeftPanel/WeaponStats" unique_id=2003479944]
+layout_mode = 2
+text = "Pistol"
+
+[node name="DMG" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=386870006]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/DMG" unique_id=2040758161]
+layout_mode = 2
+tooltip_text = "🗡️"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/DMG" unique_id=43898465]
+layout_mode = 2
+
+[node name="AtkSpeed" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=630690796]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/AtkSpeed" unique_id=1600219992]
+layout_mode = 2
+tooltip_text = "⚡"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/AtkSpeed" unique_id=1003274803]
+layout_mode = 2
+
+[node name="Range" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=473013828]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/Range" unique_id=156633701]
+layout_mode = 2
+tooltip_text = "📏"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/Range" unique_id=1380364389]
+layout_mode = 2
+
+[node name="Crit" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=1649266087]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/Crit" unique_id=345837879]
+layout_mode = 2
+tooltip_text = "💥"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/Crit" unique_id=2070183544]
+layout_mode = 2
+
+[node name="ShotSpeed" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=1231666880]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/ShotSpeed" unique_id=1090027882]
+layout_mode = 2
+tooltip_text = "💨"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/ShotSpeed" unique_id=481487131]
+layout_mode = 2
+
+[node name="Spread" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=420000241]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/Spread" unique_id=2073195120]
+layout_mode = 2
+tooltip_text = "🎯"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/Spread" unique_id=594248379]
+layout_mode = 2
+
+[node name="Ammo" type="HBoxContainer" parent="LeftPanel/WeaponStats" unique_id=1639375616]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="LeftPanel/WeaponStats/Ammo" unique_id=1655987436]
+layout_mode = 2
+tooltip_text = "🔫"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="LeftPanel/WeaponStats/Ammo" unique_id=216432774]
+layout_mode = 2
+
+[node name="ReloadBar" type="ProgressBar" parent="LeftPanel/WeaponStats" unique_id=706583848]
+visible = false
+custom_minimum_size = Vector2(140, 8)
+layout_mode = 2
+
+[node name="BottomBar" type="HBoxContainer" parent="." unique_id=720580750]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_right = 12.0
+grow_vertical = 0
+theme_override_constants/separation = 8
+
+[node name="Slot1" type="Panel" parent="BottomBar" unique_id=1254631253]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+
+[node name="HighLight" type="Panel" parent="BottomBar/Slot1" unique_id=1624389888]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Icon" type="TextureRect" parent="BottomBar/Slot1" unique_id=589595566]
+custom_minimum_size = Vector2(68, 68)
+layout_mode = 0
+offset_left = -1.0
+offset_right = 67.0
+offset_bottom = 68.0
+texture = ExtResource("2_efote")
+expand_mode = 1
+
+[node name="Slot2" type="Panel" parent="BottomBar" unique_id=1928312101]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+
+[node name="HighLight" type="Panel" parent="BottomBar/Slot2" unique_id=1986789514]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Icon" type="TextureRect" parent="BottomBar/Slot2/HighLight" unique_id=417315401]
+custom_minimum_size = Vector2(68, 68)
+layout_mode = 0
+offset_left = -1.0
+offset_right = 67.0
+offset_bottom = 68.0
+texture = ExtResource("2_efote")
+expand_mode = 1
+
+[node name="GrenadeSlot" type="Panel" parent="BottomBar" unique_id=1481534500]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="BottomBar/GrenadeSlot" unique_id=490307591]
+custom_minimum_size = Vector2(68, 68)
+layout_mode = 0
+offset_left = -1.0
+offset_right = 67.0
+offset_bottom = 68.0
+texture = ExtResource("2_efote")
+expand_mode = 1
+
+[node name="ActiveSlot" type="Panel" parent="BottomBar" unique_id=1592914231]
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+
+[node name="Desc" type="Label" parent="BottomBar/ActiveSlot" unique_id=1354072724]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
+[node name="Icon" type="TextureRect" parent="BottomBar/ActiveSlot" unique_id=1998557189]
+custom_minimum_size = Vector2(68, 68)
+layout_mode = 0
+offset_left = -2.0
+offset_right = 66.0
+offset_bottom = 68.0
+texture = ExtResource("2_efote")
+expand_mode = 1
+
+[node name="TopRight" type="VBoxContainer" parent="." unique_id=1349626412]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -40.0
+offset_bottom = 40.0
+grow_horizontal = 0
+pivot_offset = Vector2(-8, 8)
+
+[node name="SpaceItem" type="HBoxContainer" parent="TopRight" unique_id=1654601709]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="TopRight/SpaceItem" unique_id=1773273855]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Name" type="Label" parent="TopRight/SpaceItem" unique_id=1280770069]
+layout_mode = 2
+text = "(brak)"
+
+[node name="Minimap" type="TextureRect" parent="TopRight" unique_id=275105998]
+custom_minimum_size = Vector2(180, 180)
+layout_mode = 2
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="BottomRight" type="VBoxContainer" parent="." unique_id=711036696]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -40.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 8
+
+[node name="Currency" type="HBoxContainer" parent="BottomRight" unique_id=1692840373]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Gold" type="HBoxContainer" parent="BottomRight/Currency" unique_id=450926033]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="BottomRight/Currency/Gold" unique_id=1526829199]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "🪙"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="BottomRight/Currency/Gold" unique_id=1681662216]
+layout_mode = 2
+text = "0"
+
+[node name="Keys" type="HBoxContainer" parent="BottomRight/Currency" unique_id=1854842685]
+layout_mode = 2
+
+[node name="Icon" type="TextureRect" parent="BottomRight/Currency/Keys" unique_id=2103836607]
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+tooltip_text = "🗝️"
+texture = ExtResource("2_efote")
+expand_mode = 3
+
+[node name="Value" type="Label" parent="BottomRight/Currency/Keys" unique_id=2071994323]
+layout_mode = 2
+text = "0"
+
+[node name="PassiveItems" type="GridContainer" parent="BottomRight" unique_id=514040031]
+layout_mode = 2
+columns = 6

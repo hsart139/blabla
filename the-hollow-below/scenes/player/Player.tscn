@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://dkp2nctntkhk3"]
+
+[ext_resource type="Script" uid="uid://5dwyvljnnyve" path="res://scenes/player/player.gd" id="1_gfjak"]
+[ext_resource type="PackedScene" uid="uid://du3u1nwmuu4uq" path="res://scenes/player/weapon.tscn" id="1_wr5hl"]
+[ext_resource type="Script" path="res://scripts/inventory/weapon_inventory.gd" id="2_inv"]
+[ext_resource type="PackedScene" path="res://scenes/ui/swap_prompt.tscn" id="3_swap"]
+[ext_resource type="PackedScene" path="res://scenes/ui/upgrade_panel.tscn" id="4_upgpanel"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_o8nba"]
+size = Vector2(32, 32)
+
+[node name="Player" type="CharacterBody2D" unique_id=879668895]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_gfjak")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+offset_left = -16.0
+offset_top = -16.0
+offset_right = 16.0
+offset_bottom = 16.0
+color = Color(0, 1, 1, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_o8nba")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(1.5, 1.5)
+position_smoothing_enabled = true
+
+[node name="WeaponPivot" type="Node2D" parent="."]
+position = Vector2(16, 0)
+
+[node name="Weapon" parent="WeaponPivot" instance=ExtResource("1_wr5hl")]
+
+[node name="Weapon2" parent="WeaponPivot" instance=ExtResource("1_wr5hl")]
+visible = false
+
+[node name="WeaponInventory" type="Node" parent="."]
+script = ExtResource("2_inv")
+
+[node name="SwapPrompt" parent="." instance=ExtResource("3_swap")]
+
+[node name="UpgradePanel" parent="." instance=ExtResource("4_upgpanel")]

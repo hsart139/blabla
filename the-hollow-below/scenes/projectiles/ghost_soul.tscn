@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://ghost_soul_001"]
+
+[ext_resource type="Script" path="res://scenes/projectiles/ghost_soul.gd" id="1_soul"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_soul"]
+radius = 8.0
+
+[node name="GhostSoul" type="Area2D" unique_id=100000001]
+collision_layer = 8
+collision_mask = 4
+script = ExtResource("1_soul")
+
+[node name="Visual" type="ColorRect" parent="."]
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+color = Color(0.6, 0.9, 1.0, 0.7)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_soul")

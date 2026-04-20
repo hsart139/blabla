@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://ealqklacglfd"]
+
+[ext_resource type="PackedScene" uid="uid://dkp2nctntkhk3" path="res://scenes/player/Player.tscn" id="1_0xm2m"]
+[ext_resource type="PackedScene" uid="uid://cdhqyxehvcicp" path="res://HUD.tscn" id="1_h2yge"]
+[ext_resource type="PackedScene" uid="uid://bvwvxhrf1et4r" path="res://scenes/enemies/enemy_basic.tscn" id="2_h2yge"]
+[ext_resource type="PackedScene" path="res://scenes/pickups/weapon_pickup.tscn" id="3_pickup"]
+
+[node name="Main" type="Node2D" unique_id=755294603]
+
+[node name="Main" parent="." unique_id=514642151 instance=ExtResource("1_h2yge")]
+
+[node name="Player" parent="." unique_id=40265579 groups=["player"] instance=ExtResource("1_0xm2m")]
+position = Vector2(-254, -114)
+
+[node name="EnemyBasic" parent="." unique_id=557164597 instance=ExtResource("2_h2yge")]
+position = Vector2(-115, -114)
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=211139801]
+z_index = -1
+offset_left = -1000.0
+offset_top = -1000.0
+offset_right = 1000.0
+offset_bottom = 1000.0
+mouse_filter = 2
+color = Color(0.39232534, 0.39232537, 0.39232534, 1)
+
+[node name="WeaponPickup_Revolver" parent="." instance=ExtResource("3_pickup")]
+position = Vector2(-100, 50)
+preset = "revolver"
+
+[node name="WeaponPickup_Katana" parent="." instance=ExtResource("3_pickup")]
+position = Vector2(-150, 80)
+preset = "katana"
+
+[node name="WeaponPickup_Greatsword" parent="." instance=ExtResource("3_pickup")]
+position = Vector2(-50, 80)
+preset = "greatsword"
+
+[node name="WeaponPickup_SMG" parent="." instance=ExtResource("3_pickup")]
+position = Vector2(-200, 50)
+preset = "smg"
